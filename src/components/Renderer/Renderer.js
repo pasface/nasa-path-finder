@@ -23,6 +23,20 @@ import PropTypes from 'prop-types';
 
 let OrbitControls = OrbitControlsFactory(THREE);
 
+//initialize loading manager to null
+//var LOADING_MANAGER = null;
+
+// initialize resource loaded to false to be changed to true upon model load
+var RESOURCES_LOADED = true;
+// create material for loadscreen object
+var mat = new THREE.MeshBasicMaterial({color:0x4444ff});
+// create loadscreen object
+var loadingScreen = {
+	scene: new THREE.Scene(),
+	camera: new THREE.PerspectiveCamera(1000, window.innerWidth / window.innerHeight, 0.0001, 5000),
+	sphere: new THREE.Mesh( new THREE.SphereGeometry( .1, 10, 10 ), mat )
+}
+
 // create constructor
 export default class Renderer extends React.Component {
   constructor() {
@@ -44,10 +58,6 @@ export default class Renderer extends React.Component {
     this.state = {
       hoveredHandrail: null
     };
-    this.handleHandrailMouseClick = this.handleHandrailMouseClick.bind(this);
-    this.state = {
-      clickedHandrail: null
-    }
     this.handleWindowResize = this.handleWindowResize.bind(this);
     this.animate = this.animate.bind(this);
     this.processFiles = this.processFiles.bind(this);
@@ -62,6 +72,8 @@ export default class Renderer extends React.Component {
 
   // 
   componentDidMount() {
+	// addition for load progress ------------------------------- 1 line
+	setTimeout(() => this.setState({ loading: false }), 1500); // simulates an async action, and hides the spinner
 	// create constants and set values
 	const {
 		// -- set background and lighting effect values here --
@@ -85,7 +97,24 @@ export default class Renderer extends React.Component {
     // create scene object
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(scene_bg_color);
-
+    
+    // original situation of load-screen object
+    loadingScreen.sphere.position.set(-1,-3,5);
+    loadingScreen.camera.lookAt(loadingScreen.sphere.position);
+    loadingScreen.scene.add(loadingScreen.sphere);
+    
+    // add a new loading manager
+    var loadingManager = new THREE.LoadingManager();
+    
+    // check progress of load manager
+    /*loadingManager.onProgress = function(item, loaded, total){
+    	
+    }*/
+    
+    // update RESOURCES_LOADED to true if loaded
+    loadingManager.onLoad = function(){
+    	RESOURCES_LOADED = true;
+    }
     // mouse controls to rotate/zoom the model
     new OrbitControls(this.camera);
     
@@ -132,13 +161,6 @@ export default class Renderer extends React.Component {
   //handrail mouseover state
   handleHandrailMouseOver(e) {
     this.setState({hoveredHandrail: e.target});
-    //lowPriorityWarning(false, 'Handrail Hovered!');
-    //console.log('test');
-  };
-
-  //handrail mouse click state
-  handleHandrailMouseClick(e) {
-    this.setState({clickedHandrail: e.target});
   };
   
   //create glow material
@@ -361,6 +383,16 @@ export default class Renderer extends React.Component {
   
   //animate scene movement
   animate() {
+	  if (RESOURCES_LOADED == false){
+		  requestAnimationFrame(this.animate);
+		  
+		  var quaternion = new THREE.Quaternion();
+		  quaternion.setFromAxisAngle(new THREE.Vector3(0, .1, .1).normalize(), 0.01);
+		  loadingScreen.sphere.position.applyQuaternion(quaternion);
+		  
+		  this.renderer.render(loadingScreen.scene, loadingScreen.camera);
+		  return;
+	  }
 	  requestAnimationFrame(this.animate);
 	  this.camera.lookAt(this.cameraTarget);
 	  this.renderer.render(this.scene, this.camera);
@@ -370,8 +402,14 @@ export default class Renderer extends React.Component {
   //render div for state of hovered handrails
   render() {
 	  const {
+		  // addition for load progress ------------------------------- 1 line
+		  loading,
 		  hoveredHandrail
 	  } = this.state;
+	  // addition for load progress ------------------------------- 3 lines
+	  if(loading) { // if your component doesn't have to wait for an async action, remove this block 
+	      return null; // render null when app is not ready
+	  }
 	  return (
 			  <div>
 			  <div className='info-panel'>
